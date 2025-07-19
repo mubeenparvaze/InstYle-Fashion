@@ -85,3 +85,19 @@
     <script src="script.js"></script>
 </body>
 </html>
+
+// Basic interactivity for Add to Cart buttons
+document.querySelectorAll('.add-to-cart').forEach(button => {
+    button.addEventListener('click', () => {
+        alert('Item added to cart!');
+    });
+});
+
+// Smooth scrolling for navigation links
+document.querySelectorAll('nav a').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+        e.preventDefault();
+        const sectionId = this.getAttribute('href').substring(1);
+        document.getElementById(sectionId).scrollIntoView({ behavior: 'smooth' });
+    });
+});
