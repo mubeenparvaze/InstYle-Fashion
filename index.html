@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPay Smart Tracker Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { background: #f8f9fa; font-family: sans-serif; }
+        .main-container { max-width: 600px; margin: auto; padding: 20px; }
+        .card { border-radius: 15px; border: none; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+        .btn-primary { background: #1a73e8; border: none; padding: 12px; font-weight: 600; }
+        .status-msg { font-size: 0.8rem; color: #666; margin-top: 10px; }
+        .table-container { background: white; border-radius: 10px; overflow: hidden; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <div class="card p-4 mb-3 text-center">
+        <h4 class="fw-bold mb-3">GPay Expense Tracker</h4>
+        <label class="btn btn-primary w-100">
+            ➕ UPLOAD TRANSACTION SCREENSHOT
+            <input type="file" id="uploadInput" accept="image/*" multiple hidden>
+        </label>
+        <div id="status" class="status-msg">Waiting for upload...</div>
+    </div>
+
+    <div class="d-flex gap-2 mb-3">
+        <button class="btn btn-dark w-100" onclick="downloadPDF()">📥 DOWNLOAD STATEMENT</button>
+        <button class="btn btn-outline-danger" onclick="clearAll()">🗑️ CLEAR</button>
+    </div>
+
+    <div class="table-container shadow-sm">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="dataTable">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const { jsPDF } = window.jspdf;
+    let transactions = JSON.parse(localStorage.getItem('gpay_v3')) || [];
+
+    document.getElementById('uploadInput').onchange = async (e) => {
+        const files = Array.from(e.target.files);
+        const status = document.getElementById('status');
+        
+        for (let file of files) {
+            status.innerText = "Scanning... This takes 5-10 seconds.";
+            try {
+                const result = await Tesseract.recognize(file, 'eng');
+                const lines = result.data.text.split('\n');
+                
+                // Optimized for List Screenshots (like yours)
+                lines.forEach(line => {
+                    const amountMatch = line.match(/(?:₹|Rs\.?)\s?([\d,]+(?:\.\d{2})?)/i);
+                    if (amountMatch) {
+                        const amt = amountMatch[1].replace(/,/g, '');
+                        if (parseFloat(amt) > 0) {
+                            transactions.push({
+                                id: Date.now() + Math.random(),
+                                amount: amt,
+                                date: new Date().toLocaleDateString('en-IN')
+                            });
+                        }
+                    }
+                });
+            } catch (err) {
+                status.innerText = "Error scanning image.";
+            }
+        }
+        
+        saveAndRender();
+        status.innerText = "Sync Complete!";
+    };
+
+    function saveAndRender() {
+        localStorage.setItem('gpay_v3', JSON.stringify(transactions));
+        const table = document.getElementById('dataTable');
+        table.innerHTML = transactions.map(t => `
+            <tr>
+                <td><small>${t.date}</small></td>
+                <td><strong>₹${t.amount}</strong></td>
+                <td><button class="btn btn-sm text-danger" onclick="remove('${t.id}')">✕</button></td>
+            </tr>
+        `).join('') || '<tr><td colspan="3" class="text-center text-muted">No data found</td></tr>';
+    }
+
+    function remove(id) {
+        transactions = transactions.filter(t => t.id != id);
+        saveAndRender();
+    }
+
+    function clearAll() {
+        if(confirm("Clear all data?")) {
+            transactions = [];
+            saveAndRender();
+        }
+    }
+
+    function downloadPDF() {
+        if (transactions.length === 0) return alert("Nothing to download! Upload a screenshot first.");
+        
+        const doc = new jsPDF();
+        doc.text("GPay Transaction Report", 20, 20);
+        let y = 30;
+        transactions.forEach((t, i) => {
+            doc.text(`${i+1}. ${t.date} --- ₹${t.amount}`, 20, y);
+            y += 10;
+        });
+        
+        // Open PDF in new tab
+        const blob = doc.output('blob');
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+    }
+
+    saveAndRender();
+</script>
+</body>
+</html>
